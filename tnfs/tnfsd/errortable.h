@@ -60,6 +60,7 @@
 #define TNFS_EALREADY 0x1F
 #define TNFS_ESTALE 0x20
 #define TNFS_EOF 0x21
+#define TNFS_EBADSESSION 0xFF /* invalid session */
 
 void tnfs_init_errtable();
 unsigned char tnfs_error(int econv);

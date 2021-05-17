@@ -313,7 +313,7 @@ void tnfs_decode(struct sockaddr_in *cliaddr, int rxbytes, unsigned char *rxbuf)
 		sess = tnfs_findsession_sid(hdr.sid, &sindex);
 		if (sess == NULL)
 		{
-			TNFSMSGLOG(&hdr, "Invalid session ID");
+			tnfs_invalidsession(&hdr);
 			return;
 		}
 		if (sess->ipaddr != hdr.ipaddr)
@@ -370,6 +370,13 @@ void tnfs_decode(struct sockaddr_in *cliaddr, int rxbytes, unsigned char *rxbuf)
 	}
 }
 
+void tnfs_invalidsession(Header *hdr)
+{
+	TNFSMSGLOG(hdr, "Invalid session ID");
+	hdr->status = TNFS_EBADSESSION;
+	tnfs_send(NULL, hdr, NULL, 0);
+}
+
 void tnfs_badcommand(Header *hdr, Session *sess)
 {
 	TNFSMSGLOG(hdr, "Bad command");
@@ -381,7 +388,8 @@ void tnfs_send(Session *sess, Header *hdr, unsigned char *msg, int msgsz)
 {
 	struct sockaddr_in cliaddr;
 	ssize_t txbytes;
-	unsigned char *txbuf = sess->lastmsg;
+	unsigned char txbuf_nosess[5];
+	unsigned char *txbuf = sess ? sess->lastmsg : txbuf_nosess;
 
 	// TNFS_HEADERSZ + statuscode + msg
 	if (TNFS_HEADERSZ + 1 + msgsz > MAXMSGSZ)
@@ -393,15 +401,18 @@ void tnfs_send(Session *sess, Header *hdr, unsigned char *msg, int msgsz)
 	cliaddr.sin_addr.s_addr = hdr->ipaddr;
 	cliaddr.sin_port = htons(hdr->port);
 
-	uint16tnfs(txbuf, hdr->sid);
+	uint16tnfs(txbuf, sess ? hdr->sid : 0);
 	*(txbuf + 2) = hdr->seqno;
 	*(txbuf + 3) = hdr->cmd;
 	*(txbuf + 4) = hdr->status;
 	if (msg)
 		memcpy(txbuf + 5, msg, msgsz);
 
-	sess->lastmsgsz = TNFS_HEADERSZ + 1 + msgsz; /* header + status code + payload */
-	sess->lastseqno = hdr->seqno;
+	if (sess)
+	{
+		sess->lastmsgsz = TNFS_HEADERSZ + 1 + msgsz; /* header + status code + payload */
+		sess->lastseqno = hdr->seqno;
+	}
 
 	txbytes = sendto(sockfd, WIN32_CHAR_P txbuf, msgsz + TNFS_HEADERSZ + 1, 0,
 					 (struct sockaddr *)&cliaddr, sizeof(cliaddr));

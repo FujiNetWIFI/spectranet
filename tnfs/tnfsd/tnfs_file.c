@@ -423,18 +423,30 @@ int tnfs_make_mode(unsigned int flags)
 int validate_fd(Header *hdr, Session *s, unsigned char *buf, int bufsz,
 				int propersize)
 {
+	int fd;
+
 	if (bufsz < propersize ||
 		*buf > MAX_FD_PER_CONN)
 	{
 #ifdef DEBUG
-		fprintf(stderr, "BAD FD: bufsz=%d propersize=%d fd=%d max=%d",
+		fprintf(stderr, "BAD FD: bufsz=%d propersize=%d fd=%d max=%d\n",
 				bufsz, propersize, *buf, MAX_FD_PER_CONN);
 #endif
 		hdr->status = TNFS_EBADFD;
 		tnfs_send(s, hdr, NULL, 0);
 		return 0;
 	}
-	return s->fd[*buf];
+
+	fd = s->fd[*buf];
+	if (!fd)
+	{
+#ifdef DEBUG
+		fprintf(stderr, "BAD FD: fd=%d\n", *buf);
+#endif
+		hdr->status = TNFS_EBADF; // from tnfsd.pl # Bad file handle - EBADF
+		tnfs_send(s, hdr, NULL, 0);
+	}
+	return fd;
 }
 
 int getwhence(unsigned char tnfs_whence)
